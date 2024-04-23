@@ -8,5 +8,6 @@
 /project/utils/__pycache__
 /segment_anything/__pycache__
 /segment_anything/segment_anything/__pycache__
+/segment_anything/segment_anything/utils/__pycache__
 /segment_anything/segment_anything/modeling/__pycache__
 /segment_anything/pth
