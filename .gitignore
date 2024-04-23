@@ -1,0 +1,12 @@
+/checkpoints
+/results
+/dataset
+/dataset_davis
+/vgg_lpips
+/project/__pycache__
+/project/model/__pycache__
+/project/utils/__pycache__
+/segment_anything/__pycache__
+/segment_anything/segment_anything/__pycache__
+/segment_anything/segment_anything/modeling/__pycache__
+/segment_anything/pth
