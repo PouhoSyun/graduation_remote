@@ -25,9 +25,11 @@ def unpack(dataset_mat):
     frame_times = data['frames']['t'] * 1.0e-6
     for event in tuple(zip(x, y, p, t)):
         if(event[3] <= frame_times[flag]):
+            event = (event[0], event[1], event[2], event[3] - frame_times[flag-1])
             events[-1].append(event)
         else:
             events[-1] = np.array(events[-1])
+            event = (event[0], event[1], event[2], event[3] - frame_times[flag])
             events.append([event])
             flag += 1
             if(flag == len(frame_times)): break

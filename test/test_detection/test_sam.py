@@ -1,7 +1,7 @@
 import os, sys
 
 root_path = os.path.abspath(__file__)
-root_path = '/'.join(root_path.split('/')[:-2])
+root_path = '/'.join(root_path.split('/')[:-3])
 sys.path.append(root_path)
 
 from segment_anything.segment_anything import SamPredictor, sam_model_registry
@@ -18,10 +18,11 @@ def draw_mask(image, mask_generated) :
     masked_image = masked_image.astype(np.uint8)
     return cv2.addWeighted(image, 0.3, masked_image, 0.7, 0)
 
-sam = sam_model_registry["vit_h"](checkpoint="segment_anything/vit_h.pth")
+sam = sam_model_registry["vit_b"](checkpoint="segment_anything/pth/vit_b.pth")
 predictor = SamPredictor(sam)
-img = np.array(Image.open("d:\Working\code\dataset\Flowers\RGB_frame\image_00274.jpg"))
+img = np.array(Image.open("results/vqgan/1/49/49_100.jpg"))[70:330, 27:373]
 predictor.set_image(img)
-masks, _, _ = predictor.predict(point_coords=np.array([[250, 250]]), point_labels=np.array([1]))
-img = draw_mask(img, masks.transpose(1, 2, 0))
-Image.fromarray(img).show()
+masks, _, _ = predictor.predict(point_coords=np.array([[150, 50]]), point_labels=np.array([1]))
+mask = draw_mask(img, masks.transpose(1, 2, 0))
+img = np.hstack([img, mask])
+Image.fromarray(img).save("results/sam/test.jpg")
