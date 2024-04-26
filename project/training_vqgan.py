@@ -23,15 +23,15 @@ class TrainVQGAN:
         self.discriminator.apply(weights_init)
         self.perceptual_loss = LPIPS().eval().to(device=args.device)
         self.opt_vq, self.opt_disc = self.configure_optimizers(args)
-        self.scheduler_vq = StepLR(self.opt_vq, step_size=3, gamma=0.85)
-        self.scheduler_disc = StepLR(self.opt_disc, step_size=3, gamma=0.75)
+        self.scheduler_vq = StepLR(self.opt_vq, step_size=5, gamma=0.2)
+        self.scheduler_disc = StepLR(self.opt_disc, step_size=5, gamma=0.1)
 
         self.prepare_training()
         self.train(args)
 
     def configure_optimizers(self, args):
         lr = args.learning_rate
-        opt_vq = torch.optim.Adam(
+        opt_vq = torch.optim.Adam( 
             list(self.vqgan.encoder.parameters()) +
             list(self.vqgan.decoder.parameters()) +
             list(self.vqgan.codebook.parameters()) +
@@ -54,7 +54,7 @@ class TrainVQGAN:
         steps_per_epoch = len(train_dataset)
         for epoch in range(args.epochs):
             self.scheduler_vq.step()
-            self.scheduler_disc.step()
+            if epoch > 16: self.scheduler_disc.step()
 
             with tqdm(range(len(train_dataset))) as pbar:
                 self.opt_vq.zero_grad()
@@ -122,14 +122,14 @@ if __name__ == '__main__':
     parser.add_argument('--image-channels', type=int, default=1, help='Number of channels of images (default: 1)')
     parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=4, help='Input batch size for training (default: 6)')
-    parser.add_argument('--epochs', type=int, default=50, help='Number of epochs to train (default: 100)')
-    parser.add_argument('--learning-rate', type=float, default=2e-05, help='Learning rate (default: 2.25e-05)')
+    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 100)')
+    parser.add_argument('--learning-rate', type=float, default=1e-03, help='Learning rate (default: 2.25e-05)')
     parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.5)')
-    parser.add_argument('--beta2', type=float, default=0.999, help='Adam beta param (default: 0.999)')
-    parser.add_argument('--disc-start', type=int, default=3500, help='When to start the discriminator (default: 10000)')
+    parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
+    parser.add_argument('--disc-start', type=int, default=4000, help='When to start the discriminator (default: 10000)')
     parser.add_argument('--disc-factor', type=float, default=2, help='')
-    parser.add_argument('--rec-loss-factor', type=float, default=4, help='Weighting factor for reconstruction loss.')
-    parser.add_argument('--perceptual-loss-factor', type=float, default=1.6, help='Weighting factor for perceptual loss.')
+    parser.add_argument('--rec-loss-factor', type=float, default=2, help='Weighting factor for reconstruction loss.')
+    parser.add_argument('--perceptual-loss-factor', type=float, default=1.5, help='Weighting factor for perceptual loss.')
     parser.add_argument('--accu-times', type=int, default=2, help='Times of gradient accumulation.')
     args = parser.parse_args()
     args.dataset = "1"
