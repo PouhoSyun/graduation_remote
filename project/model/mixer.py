@@ -44,7 +44,7 @@ class Mixer(nn.Module):
     @staticmethod
     def load_vqgan(args):
         model = VQGAN(args).to(args.device)
-        model.load_checkpoint(args.checkpoint_path)
+        model.load_checkpoint(args.vqg_checkpoint_path)
         model = model.eval()
         return model
 

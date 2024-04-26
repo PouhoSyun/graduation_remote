@@ -154,8 +154,8 @@ if __name__ == '__main__':
     args.dataset = "1"
     args.dataset_format = 'aedat'
     args.split = False
-    args.vqg_checkpoint_path = "checkpoints/vqgan/"+args.dataset+"/epoch_49.pt"
-    args.dis_checkpoint_path = "checkpoints/discriminator/"+args.dataset+"/epoch_49.pt"
+    args.vqg_checkpoint_path = "checkpoints/vqgan/"+args.dataset+"/epoch_15.pt"
+    args.dis_checkpoint_path = "checkpoints/discriminator/"+args.dataset+"/epoch_15.pt"
     
     if torch.cuda.is_available():
         args.device = torch.device("cuda")
