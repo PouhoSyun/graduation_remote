@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 # distinguish real image and fake image and make the difference of confidence as huge as possible
@@ -24,3 +25,7 @@ class Discriminator(nn.Module):
     
     def forward(self, x):
         return self.model(x)
+    
+    def load_checkpoint(self, path):
+        data = torch.load(path)
+        self.load_state_dict(data)

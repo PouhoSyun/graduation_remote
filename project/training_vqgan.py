@@ -19,12 +19,14 @@ from utils.utils import load_frameset, weights_init
 class TrainVQGAN:
     def __init__(self, args):
         self.vqgan = VQGAN(args).to(device=args.device)
+        # self.vqgan.load_checkpoint("checkpoints/vqgan/"+args.dataset+"/epoch_87.pt")
         self.discriminator = Discriminator(args).to(device=args.device)
         self.discriminator.apply(weights_init)
+        # self.discriminator.load_checkpoint("checkpoints/discriminator/"+args.dataset+"/epoch_87.pt")
         self.perceptual_loss = LPIPS().eval().to(device=args.device)
         self.opt_vq, self.opt_disc = self.configure_optimizers(args)
-        self.scheduler_vq = StepLR(self.opt_vq, step_size=5, gamma=0.2)
-        self.scheduler_disc = StepLR(self.opt_disc, step_size=5, gamma=0.1)
+        self.scheduler_vq = StepLR(self.opt_vq, step_size=1, gamma=0.95)
+        self.scheduler_disc = StepLR(self.opt_disc, step_size=1, gamma=0.9)
 
         self.prepare_training()
         self.train(args)
@@ -54,7 +56,7 @@ class TrainVQGAN:
         steps_per_epoch = len(train_dataset)
         for epoch in range(args.epochs):
             self.scheduler_vq.step()
-            if epoch > 16: self.scheduler_disc.step()
+            self.scheduler_disc.step()
 
             with tqdm(range(len(train_dataset))) as pbar:
                 self.opt_vq.zero_grad()
@@ -128,7 +130,7 @@ if __name__ == '__main__':
     parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
     parser.add_argument('--disc-start', type=int, default=4000, help='When to start the discriminator (default: 10000)')
     parser.add_argument('--disc-factor', type=float, default=2, help='')
-    parser.add_argument('--rec-loss-factor', type=float, default=2, help='Weighting factor for reconstruction loss.')
+    parser.add_argument('--rec-loss-factor', type=float, default=2.5, help='Weighting factor for reconstruction loss.')
     parser.add_argument('--perceptual-loss-factor', type=float, default=1.5, help='Weighting factor for perceptual loss.')
     parser.add_argument('--accu-times', type=int, default=2, help='Times of gradient accumulation.')
     args = parser.parse_args()
