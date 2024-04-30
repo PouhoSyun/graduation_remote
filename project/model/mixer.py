@@ -14,12 +14,12 @@ class Mixer(nn.Module):
         res_block_cnt = 2
         resolution = 400
         layers = [nn.Conv2d(2, 8, 3, 1, 1),
-                  methods.Swish(),
-                  nn.Conv2d(8, 6, 3, 1, 1),
-                  nn.Conv2d(6, 4, 3, 1, 1),
-                  nn.Conv2d(4, 2, 3, 1, 1),
-                  methods.Swish(),
-                  nn.Conv2d(2, channels[0], 3, 1, 1)]
+                nn.BatchNorm2d(num_features=8),
+                methods.Swish(),
+                # nn.Conv2d(8, 8, 3, 1, 1),
+                # nn.BatchNorm2d(num_features=8),
+                # methods.Swish(),
+                nn.Conv2d(8, channels[0], 3, 1, 1)]
         
         for i in range(len(channels) - 1):
             in_channels = channels[i]
@@ -40,6 +40,10 @@ class Mixer(nn.Module):
         layers.append(methods.Swish())
         layers.append(nn.Conv2d(channels[-1], args.latent_dim, 3, 1, 1))
         self.model = nn.Sequential(*layers)
+
+        if args.load:
+            self.model.load_state_dict(torch.load(args.mix_checkpoint_path))
+            # self.model.eval()
     
     @staticmethod
     def load_vqgan(args):

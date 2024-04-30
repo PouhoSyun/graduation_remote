@@ -88,40 +88,47 @@ def squarify(src: np.ndarray, to_size):
 # transform matfile to stream array, then use spatial-temporal voxel grid method to record events.
 # the output is the event voxel grid map resized to size_scale(default:8) times
 def pack_event_stream(ev_stream, split=True, 
-                      size=(200, 200)):
-    event_countmap = []
-    kernel = np.array([[0.22, 0.35, 0.5, 0.35, 0.22],
-                       [0.35, 0.5, 0.7, 0.5, 0.35],
-                       [0.5, 0.7, 1, 0.7, 0.5],
-                       [0.35, 0.5, 0.7, 0.5, 0.35],
-                       [0.22, 0.35, 0.5, 0.35, 0.22]])
-    for events in ev_stream:
-        # DAVIS infrared senser use linear threshold
-        event_field = np.zeros(size)
-        for event in events:
-            #consider pre/past event affect
-            eff = kernel * event[2] / (1 + math.exp(1 - event[3] / TIME_PERIOD))
-            x = int(event[0])
-            y = int(event[1])
-            eff = eff[max(0, 2-y):min(5, size[0]+2-y),max(0, 2-x):min(5, size[1]+2-x)]
-            event_field[max(0,y-2):min(size[0]+1,y+3), max(0,x-2):min(size[1]+1,x+3)] += eff
-        event_field = np.clip(event_field, -255, 255)
-        event_field = np.flip(np.flip(event_field, axis=0), axis=1)
-        for it in np.nditer(event_field, op_flags=["readwrite"]):
-            it[...] = np.uint8(255 / (1 + math.exp(-it)))
+                      size=(260, 346)):
+    if True:
+        print("Reading event countmap from npy")
+        event_countmap = np.load("dataset_davis/event_countmap.npy")
+    else:
+        event_countmap = []
+        kernel = np.array([[0.22, 0.35, 0.5, 0.35, 0.22],
+                        [0.35, 0.5, 0.7, 0.5, 0.35],
+                        [0.5, 0.7, 1, 0.7, 0.5],
+                        [0.35, 0.5, 0.7, 0.5, 0.35],
+                        [0.22, 0.35, 0.5, 0.35, 0.22]])
+        for events in ev_stream:
+            # DAVIS infrared senser use linear threshold
+            event_field = np.zeros(size)
+            for event in events:
+                #consider pre/past event affect
+                event_field[int(event[1])][int(event[0])] += event[3] / (1 + math.exp(1 - event[2] / TIME_PERIOD))
+                eff = kernel * event[3] / (1 + math.exp(1 - event[2] / TIME_PERIOD))
+                x = int(event[0])
+                y = int(event[1])
+                eff = eff[max(0, 2-y):min(5, size[0]+2-y),max(0, 2-x):min(5, size[1]+2-x)]
+                event_field[max(0,y-2):min(size[0]+1,y+3), max(0,x-2):min(size[1]+1,x+3)] += eff
+            event_field = event_field / event_field.mean()
+            event_field = np.clip(event_field, -255, 255)
+            event_field = np.flip(np.flip(event_field, axis=0), axis=1)
+            for it in np.nditer(event_field, op_flags=["readwrite"]):
+                it[...] = np.uint8(255 / (1 + math.exp(-it)))
 
-        # split the output into 16 50*50 pieces, if necessary
-        # event_field = cv2.resize(event_field, dsize=dsize, interpolation=cv2.INTER_LINEAR)
-        event_field = np.array([event_field])
-        event_field = squarify(event_field, 400)
+            # split the output into 16 50*50 pieces, if necessary
+            # event_field = cv2.resize(event_field, dsize=dsize, interpolation=cv2.INTER_LINEAR)
+            event_field = np.array([event_field])
+            event_field = squarify(event_field, 400)
+            
+            if not split:
+                event_countmap.append(event_field)
+            else:
+                event_countmap.append(hvsplit(event_field))
         
-        if not split:
-            event_countmap.append(event_field)
-        else:
-            event_countmap.append(hvsplit(event_field))
-    
-    event_countmap = np.array(event_countmap)
-    print("Built event countmap from packages")
+        event_countmap = np.array(event_countmap)
+        print("Building event countmap from packages")
+        np.save("dataset_davis/event_countmap.npy", event_countmap)
     return event_countmap
 
 # size of frame camera is 1520 * 1440, then split to 16 1-channel 400*400 cell-pics.
