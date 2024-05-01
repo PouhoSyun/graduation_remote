@@ -19,10 +19,10 @@ from utils.utils import load_frameset, weights_init
 class TrainVQGAN:
     def __init__(self, args):
         self.vqgan = VQGAN(args).to(device=args.device)
-        self.vqgan.eval().load_checkpoint("checkpoints/vqgan/"+args.dataset+"/epoch_15.pt")
+        self.vqgan.load_checkpoint("checkpoints/vqgan/"+args.dataset+"/epoch_15.pt")
         self.discriminator = Discriminator(args).to(device=args.device)
         self.discriminator.apply(weights_init)
-        self.discriminator.eval().load_checkpoint("checkpoints/discriminator/"+args.dataset+"/epoch_15.pt")
+        self.discriminator.load_checkpoint("checkpoints/discriminator/"+args.dataset+"/epoch_15.pt")
         self.perceptual_loss = LPIPS().eval().to(device=args.device)
         self.opt_vq, self.opt_disc = self.configure_optimizers(args)
         self.scheduler_vq = StepLR(self.opt_vq, step_size=1, gamma=0.95)

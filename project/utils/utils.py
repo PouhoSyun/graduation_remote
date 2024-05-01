@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.utils.data as data
 import matplotlib.pyplot as plt
 import albumentations as alb
+from sklearn.preprocessing import StandardScaler
 from project.utils.unpack import unpack
 # from unpack import unpack
 
@@ -104,14 +105,15 @@ def pack_event_stream(ev_stream, split=True,
             event_field = np.zeros(size)
             for event in events:
                 #consider pre/past event affect
-                event_field[int(event[1])][int(event[0])] += event[3] / (1 + math.exp(1 - event[2] / TIME_PERIOD))
                 eff = kernel * event[3] / (1 + math.exp(1 - event[2] / TIME_PERIOD))
                 x = int(event[0])
                 y = int(event[1])
                 eff = eff[max(0, 2-y):min(5, size[0]+2-y),max(0, 2-x):min(5, size[1]+2-x)]
                 event_field[max(0,y-2):min(size[0]+1,y+3), max(0,x-2):min(size[1]+1,x+3)] += eff
-            event_field = event_field / event_field.mean()
-            event_field = np.clip(event_field, -255, 255)
+            std = StandardScaler()
+            event_field = std.fit_transform(event_field)
+            # event_field = event_field / event_field.mean()
+            # event_field = np.clip(event_field, -255, 255)
             event_field = np.flip(np.flip(event_field, axis=0), axis=1)
             for it in np.nditer(event_field, op_flags=["readwrite"]):
                 it[...] = np.uint8(255 / (1 + math.exp(-it)))

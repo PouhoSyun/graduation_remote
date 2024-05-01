@@ -3,11 +3,10 @@ import torch.nn as nn
 from model.vqgan import VQGAN
 import utils.methods as methods
 
-class Mixer(nn.Module):
+class MixModel(nn.Module):
     def __init__(self, args):
-        super(Mixer, self).__init__()
-        self.vqgan = self.load_vqgan(args)
-        self.latent_dim = args.latent_dim
+        super(MixModel, self).__init__()
+        latent_dim = args.latent_dim
 
         channels = [64, 64, 64, 128, 128, 256]
         attn_resolutions = [25]
@@ -16,10 +15,13 @@ class Mixer(nn.Module):
         layers = [nn.Conv2d(2, 8, 3, 1, 1),
                 nn.BatchNorm2d(num_features=8),
                 methods.Swish(),
-                # nn.Conv2d(8, 8, 3, 1, 1),
-                # nn.BatchNorm2d(num_features=8),
-                # methods.Swish(),
-                nn.Conv2d(8, channels[0], 3, 1, 1)]
+                nn.Conv2d(8, 8, 3, 1, 1),
+                nn.BatchNorm2d(num_features=8),
+                methods.Swish(),
+                nn.Conv2d(8, 24, 3, 1, 1),
+                nn.BatchNorm2d(num_features=24),
+                methods.Swish(),
+                nn.Conv2d(24, channels[0], 3, 1, 1)]
         
         for i in range(len(channels) - 1):
             in_channels = channels[i]
@@ -38,18 +40,35 @@ class Mixer(nn.Module):
         layers.append(methods.ResidualBlock(channels[-1], channels[-1]))
         layers.append(methods.GroupNorm(channels[-1]))
         layers.append(methods.Swish())
-        layers.append(nn.Conv2d(channels[-1], args.latent_dim, 3, 1, 1))
+        layers.append(nn.Conv2d(channels[-1], latent_dim, 3, 1, 1))
         self.model = nn.Sequential(*layers)
 
-        if args.load:
-            self.model.load_state_dict(torch.load(args.mix_checkpoint_path))
-            # self.model.eval()
+    def load_checkpoint(self, path):
+        data = torch.load(path)
+        self.load_state_dict(data)
+
+    def forward(self, x):
+        return self.model(x)
+
+class Mixer(nn.Module):
+    def __init__(self, args):
+        super(Mixer, self).__init__()
+        self.vqgan = self.load_vqgan(args)
+        self.model = self.load_mixmodel(args)
+        self.latent_dim = args.latent_dim
     
     @staticmethod
     def load_vqgan(args):
         model = VQGAN(args).to(args.device)
         model.load_checkpoint(args.vqg_checkpoint_path)
         model = model.eval()
+        return model
+    
+    @staticmethod
+    def load_mixmodel(args):
+        model = MixModel(args).to(args.device)
+        if args.load:
+            model.load_checkpoint(args.mix_checkpoint_path)
         return model
 
     def encode_to_z(self, x):
@@ -59,7 +78,6 @@ class Mixer(nn.Module):
         indices = indices.view(quant_z.shape[0], -1)
         return quant_z, indices, q_loss
 
-    # @torch.no_grad()
     def z_to_image(self, indices, z_size=25):
         ix_to_vectors = self.vqgan.codebook.embedding(indices)
         ix_to_vectors = ix_to_vectors.reshape(indices.shape[0], z_size, z_size, self.latent_dim)
