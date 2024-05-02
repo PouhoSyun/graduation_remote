@@ -3,6 +3,21 @@ import torch.nn as nn
 from model.vqgan import VQGAN
 import utils.methods as methods
 
+class WeightedSumLayer(nn.Module):
+    def __init__(self, args):
+        super(WeightedSumLayer, self).__init__()
+        self.weight = nn.Parameter(torch.randn(2))
+
+    def forward(self, inputs):
+        img1 = inputs[:, 0:1]
+        img2 = inputs[:, 1:]
+        weighted_sum = self.weight[0] * img1 + self.weight[1] * img2
+        return weighted_sum
+    
+    def load_checkpoint(self, path):
+        data = torch.load(path)
+        self.load_state_dict(data)
+    
 class MixModel(nn.Module):
     def __init__(self, args):
         super(MixModel, self).__init__()
@@ -53,25 +68,30 @@ class MixModel(nn.Module):
 class Mixer(nn.Module):
     def __init__(self, args):
         super(Mixer, self).__init__()
-        self.vqgan = self.load_vqgan(args)
-        self.model = self.load_mixmodel(args)
+        # self.vqgan = self.load_vqgan(args)
+        # self.model = self.load_mixmodel(args)
+        self.vqgan = VQGAN(args)
+        self.model = MixModel(args)
         self.latent_dim = args.latent_dim
     
     @staticmethod
     def load_vqgan(args):
         model = VQGAN(args).to(args.device)
         model.load_checkpoint(args.vqg_checkpoint_path)
-        model = model.eval()
+        model.encoder.eval()
+        model.decoder.eval()
         return model
     
     @staticmethod
     def load_mixmodel(args):
+        # model = WeightedSumLayer(args).to(args.device)
         model = MixModel(args).to(args.device)
         if args.load:
             model.load_checkpoint(args.mix_checkpoint_path)
         return model
 
     def encode_to_z(self, x):
+        # encoded_images, _, _ = self.vqgan.encode(self.model(x))
         encoded_images = self.model(x)
         quant_conv_encoded_images = self.vqgan.quant_conv(encoded_images)
         quant_z, indices, q_loss = self.vqgan.codebook(quant_conv_encoded_images)
@@ -89,3 +109,7 @@ class Mixer(nn.Module):
         _, indices, q_loss = self.encode_to_z(x)
         img = self.z_to_image(indices)
         return img, q_loss
+
+    def load_checkpoint(self, path):
+        data = torch.load(path)
+        self.load_state_dict(data)
