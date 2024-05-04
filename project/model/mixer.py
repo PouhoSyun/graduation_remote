@@ -29,13 +29,13 @@ class MixModel(nn.Module):
         resolution = 400
         layers = [nn.Conv2d(2, 8, 3, 1, 1),
                 nn.BatchNorm2d(num_features=8),
-                methods.Swish(),
+                nn.LeakyReLU(0.2),
                 nn.Conv2d(8, 8, 3, 1, 1),
                 nn.BatchNorm2d(num_features=8),
-                methods.Swish(),
+                nn.LeakyReLU(0.2),
                 nn.Conv2d(8, 24, 3, 1, 1),
                 nn.BatchNorm2d(num_features=24),
-                methods.Swish(),
+                nn.LeakyReLU(0.2),
                 nn.Conv2d(24, channels[0], 3, 1, 1)]
         
         for i in range(len(channels) - 1):
@@ -79,7 +79,10 @@ class Mixer(nn.Module):
         model = VQGAN(args).to(args.device)
         model.load_checkpoint(args.vqg_checkpoint_path)
         model.encoder.eval()
-        model.decoder.eval()
+        model.quant_conv.eval()
+        # model.codebook.eval()
+        # model.post_quant_conv.eval()
+        # model.decoder.eval()
         return model
     
     @staticmethod

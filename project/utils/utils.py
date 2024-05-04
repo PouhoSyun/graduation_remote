@@ -90,22 +90,22 @@ def squarify(src: np.ndarray, to_size):
 # the output is the event voxel grid map resized to size_scale(default:8) times
 def pack_event_stream(ev_stream, split=True, 
                       size=(260, 346)):
-    if True:
+    if False:
         print("Reading event countmap from npy")
         event_countmap = np.load("dataset_davis/event_countmap.npy")
     else:
         event_countmap = []
-        kernel = np.array([[0.22, 0.35, 0.5, 0.35, 0.22],
-                        [0.35, 0.5, 0.7, 0.5, 0.35],
-                        [0.5, 0.7, 1, 0.7, 0.5],
-                        [0.35, 0.5, 0.7, 0.5, 0.35],
-                        [0.22, 0.35, 0.5, 0.35, 0.22]])
+        kernel = np.array([[0.22, 0.35, 0.49, 0.35, 0.22],
+                           [0.35, 0.49, 0.70, 0.49, 0.35],
+                           [0.49, 0.70, 1.00, 0.70, 0.49],
+                           [0.35, 0.49, 0.70, 0.49, 0.35],
+                           [0.22, 0.35, 0.49, 0.35, 0.22]])
         for events in ev_stream:
             # DAVIS infrared senser use linear threshold
             event_field = np.zeros(size)
             for event in events:
                 #consider pre/past event affect
-                eff = kernel * event[3] / (1 + math.exp(1 - event[2] / TIME_PERIOD))
+                eff = kernel * event[3] * math.tan(1.57 * event[2] / TIME_PERIOD)
                 x = int(event[0])
                 y = int(event[1])
                 eff = eff[max(0, 2-y):min(5, size[0]+2-y),max(0, 2-x):min(5, size[1]+2-x)]
@@ -121,6 +121,10 @@ def pack_event_stream(ev_stream, split=True,
             # split the output into 16 50*50 pieces, if necessary
             # event_field = cv2.resize(event_field, dsize=dsize, interpolation=cv2.INTER_LINEAR)
             event_field = np.array([event_field])
+
+            uni_kernel = np.ones((6, 6))
+            event_field = cv2.erode(event_field, uni_kernel, 5)
+            event_field = cv2.dilate(event_field, uni_kernel, 5)
             event_field = squarify(event_field, 400)
             
             if not split:
@@ -211,19 +215,28 @@ class Event_Dataset(data.Dataset):
 
 #dataset class for transformer, return items of 2-channels, with the shape of size*size
 class DAVIS_Dataset(data.Dataset):
-    def __init__(self, dataset, size, split):
+    def __init__(self, dataset, size, split, sam=False):
         ev_stream, frames_raw = unpack(dataset)
+        if sam:
+            ev_stream = ev_stream[:-1]
+            frames_raw = frames_raw[1:]
         self.eventset = Event_Dataset(ev_stream, size, split)
         self.frameset = Frame_Dataset(frames_raw, size, split)
         self._length = len(self.frameset)
+        self.scaler = 20
+        self.sam = sam
+        if sam: self.scaler = 1
         pass
 
     def __len__(self):
-        return self._length
+        return self._length * self.scaler
     
     def __getitem__(self, index):
+        index = index % self._length
         item = np.array([self.frameset[index][0], self.eventset[index][0]])
-        return torch.tensor(item)
+        if self.sam:
+            item = item[:, 70:330, 27:373]
+        return torch.Tensor(item)
     
     def __show__(self, index):
         frame1 = np.array(self.frameset[index][0].add(1).mul(127.5))
@@ -240,7 +253,7 @@ def load_frameset(args):
     return train_loader
 
 def load_davisset(args):
-    dataset = DAVIS_Dataset(args.dataset, args.image_size, args.split)
+    dataset = DAVIS_Dataset(args.dataset, args.image_size, args.split, args.sam)
     train_loader = data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False, drop_last=True)
     return train_loader
 

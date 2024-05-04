@@ -33,7 +33,7 @@ class TrainMixer:
         opt = torch.optim.Adam(
             self.mixer.parameters(),
             lr=args.learning_rate, eps=1e-08, betas=(args.beta1, args.beta2),
-            weight_decay=1e-4)
+            weight_decay=1e-5)
         return opt
 
     @staticmethod
@@ -69,6 +69,7 @@ class TrainMixer:
                 mask[i][j] = np.sum(tmp)
         mask = torch.Tensor(mask).to(args.device).detach()
         mask = torch.atan(mask) * args.bar_factor + 1
+        mask = (mask - mask.min()) / (mask.max() - mask.min())
         vutils.save_image(mask, os.path.join("results/mask/mask2.jpg"))
         loss = torch.mul(rec, mask)
         return loss.mean() * args.rec_loss_factor
@@ -94,8 +95,10 @@ class TrainMixer:
                     perceptual_loss = perceptual_loss.mean()
                     g_loss = -torch.mean(disc_fake)
                     λ = self.mixer.vqgan.calculate_lambda(perceptual_loss, g_loss)
-                    con_loss = perceptual_loss + args.disc_factor * λ * g_loss
-                    bar_loss = self.detailed(args, event_frames, rec_loss)
+                    # discrimination loss
+                    con_loss = args.disc_factor * λ * g_loss
+                    # resistance loss
+                    bar_loss = perceptual_loss + self.detailed(args, event_frames, rec_loss)
 
                     loss = (con_loss + bar_loss) / args.accu_times
                     loss.backward()
@@ -132,25 +135,26 @@ if __name__ == '__main__':
     parser.add_argument('--batch-size', type=int, default=5, help='Input batch size for training (default: 6)')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 100)')
     parser.add_argument('--learning-rate', type=float, default=5e-3, help='Learning rate.')
-    parser.add_argument('--beta1', type=float, default=0.5, help='Adam beta param (default: 0.5)')
-    parser.add_argument('--beta2', type=float, default=0.9, help='Adam beta param (default: 0.999)')
-    parser.add_argument('--disc-factor', type=float, default=0.2, help='')
-    parser.add_argument('--rec-loss-factor', type=float, default=5., help='Weighting factor for reconstruction loss.')
-    parser.add_argument('--perceptual-loss-factor', type=float, default=0.2, help='Weighting factor for perceptual loss.')
-    parser.add_argument('--bar-factor', type=float, default=2.9, help='')
-    parser.add_argument('--accu-times', type=int, default=2, help='Times of gradient accumulation.')
+    parser.add_argument('--beta1', type=float, default=0.3, help='Adam beta param (default: 0.5)')
+    parser.add_argument('--beta2', type=float, default=0.7, help='Adam beta param (default: 0.999)')
+    parser.add_argument('--disc-factor', type=float, default=0.5, help='')
+    parser.add_argument('--rec-loss-factor', type=float, default=8., help='Weighting factor for reconstruction loss.')
+    parser.add_argument('--perceptual-loss-factor', type=float, default=0.5, help='Weighting factor for perceptual loss.')
+    parser.add_argument('--bar-factor', type=float, default=2., help='')
+    parser.add_argument('--accu-times', type=int, default=3, help='Times of gradient accumulation.')
     parser.add_argument('--vqg-checkpoint-path', type=str)
     parser.add_argument('--dis-checkpoint-path', type=str)
     parser.add_argument('--mix-checkpoint-path', type=str)
     parser.add_argument('--load', type=bool, default=True)
-    parser.add_argument('--step-rate', type=float, default=0.95)
+    parser.add_argument('--step-rate', type=float, default=0.9)
+    parser.add_argument('--sam', type=bool, default=False)
 
     args = parser.parse_args()
     args.dataset = "1"
     args.dataset_format = 'aedat'
     args.vqg_checkpoint_path = "checkpoints/vqgan/"+args.dataset+"/epoch_15.pt"
     args.dis_checkpoint_path = "checkpoints/discriminator/"+args.dataset+"/epoch_15.pt"
-    args.mix_checkpoint_path = "checkpoints/mixer/"+args.dataset+"/epoch_65m.pt"
+    args.mix_checkpoint_path = "checkpoints/mixer/"+args.dataset+"/epoch_62m.pt"
     
     if torch.cuda.is_available():
         args.device = torch.device("cuda")
