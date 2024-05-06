@@ -1,6 +1,6 @@
 # data fetching and preprocessing module
 
-import cv2, math
+import cv2
 import numpy as np
 import torch
 import torch.nn as nn
@@ -8,6 +8,7 @@ import torch.utils.data as data
 import matplotlib.pyplot as plt
 import albumentations as alb
 from sklearn.preprocessing import StandardScaler
+from tqdm import tqdm
 from project.utils.unpack import unpack
 # from unpack import unpack
 
@@ -95,42 +96,55 @@ def pack_event_stream(ev_stream, split=True,
         event_countmap = np.load("dataset_davis/event_countmap.npy")
     else:
         event_countmap = []
-        kernel = np.array([[0.22, 0.35, 0.49, 0.35, 0.22],
-                           [0.35, 0.49, 0.70, 0.49, 0.35],
-                           [0.49, 0.70, 1.00, 0.70, 0.49],
-                           [0.35, 0.49, 0.70, 0.49, 0.35],
-                           [0.22, 0.35, 0.49, 0.35, 0.22]])
-        for events in ev_stream:
-            # DAVIS infrared senser use linear threshold
-            event_field = np.zeros(size)
-            for event in events:
-                #consider pre/past event affect
-                eff = kernel * event[3] * math.tan(1.57 * event[2] / TIME_PERIOD)
-                x = int(event[0])
-                y = int(event[1])
-                eff = eff[max(0, 2-y):min(5, size[0]+2-y),max(0, 2-x):min(5, size[1]+2-x)]
-                event_field[max(0,y-2):min(size[0]+1,y+3), max(0,x-2):min(size[1]+1,x+3)] += eff
-            std = StandardScaler()
-            event_field = std.fit_transform(event_field)
-            # event_field = event_field / event_field.mean()
-            # event_field = np.clip(event_field, -255, 255)
-            event_field = np.flip(np.flip(event_field, axis=0), axis=1)
-            for it in np.nditer(event_field, op_flags=["readwrite"]):
-                it[...] = np.uint8(255 / (1 + math.exp(-it)))
+        # kernel = np.array([[0.22, 0.35, 0.49, 0.35, 0.22],
+        #                    [0.35, 0.49, 0.70, 0.49, 0.35],
+        #                    [0.49, 0.70, 1.00, 0.70, 0.49],
+        #                    [0.35, 0.49, 0.70, 0.49, 0.35],
+        #                    [0.22, 0.35, 0.49, 0.35, 0.22]])
+        kernel = np.array([[0.66, 0.73, 0.81, 0.73, 0.66],
+                           [0.73, 0.81, 0.90, 0.81, 0.73],
+                           [0.81, 0.90, 1.00, 0.90, 0.81],
+                           [0.73, 0.81, 0.90, 0.81, 0.73],
+                           [0.66, 0.73, 0.81, 0.73, 0.66]])
+        
+        with tqdm(range(len(ev_stream))) as pbar:
+            for events in ev_stream:
+                # DAVIS infrared senser use linear threshold
+                event_field = np.zeros(size)
+                for event in events:
+                    #consider pre/past event affect
+                    eff = -kernel * event[3] / (event[2] / TIME_PERIOD - 1)
+                    x = int(event[0])
+                    y = int(event[1])
+                    eff = eff[max(0,2-y):min(5,size[0]+2-y),max(0,2-x):min(5,size[1]+2-x)]
+                    event_field[max(0,y-2):min(size[0],y+3), max(0,x-2):min(size[1],x+3)] += eff
+                std = StandardScaler()
+                ef = std.fit_transform(event_field.flatten().reshape(-1, 1))
+                event_field = ef.reshape(event_field.shape) * 10
+                event_field = np.flip(np.flip(event_field, axis=0), axis=1)
+                event_field = np.uint8(255 / (1 + np.exp(-event_field)))
 
-            # split the output into 16 50*50 pieces, if necessary
-            # event_field = cv2.resize(event_field, dsize=dsize, interpolation=cv2.INTER_LINEAR)
-            event_field = np.array([event_field])
+                # split the output into 16 50*50 pieces, if necessary
+                # event_field = cv2.resize(event_field, dsize=dsize, interpolation=cv2.INTER_LINEAR)
 
-            uni_kernel = np.ones((6, 6))
-            event_field = cv2.erode(event_field, uni_kernel, 5)
-            event_field = cv2.dilate(event_field, uni_kernel, 5)
-            event_field = squarify(event_field, 400)
+                event_field = cv2.dilate(event_field, np.ones((3, 3)), 5)
+                event_field = cv2.erode(event_field, np.ones((7, 7)), 8)
+                thr = np.sort(event_field.flatten())[-500]
+                event_field = cv2.threshold(event_field, thr, 255, cv2.THRESH_TOZERO)[1]
+                
+                cv2.imwrite("results/sam.jpg", event_field)
+                # event_field = cv2.dilate(event_field, np.ones((7, 7)), 5)
             
-            if not split:
-                event_countmap.append(event_field)
-            else:
-                event_countmap.append(hvsplit(event_field))
+                event_field = np.array([event_field])
+                event_field = squarify(event_field, 400)
+                
+                if not split:
+                    event_countmap.append(event_field)
+                else:
+                    event_countmap.append(hvsplit(event_field))
+
+                pbar.set_postfix()
+                pbar.update(0)
         
         event_countmap = np.array(event_countmap)
         print("Building event countmap from packages")

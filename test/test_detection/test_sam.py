@@ -14,12 +14,16 @@ import torchvision.utils as vutils
 
 def hotarea(event_frame):
     mask = event_frame
-    mask = cv2.erode(mask, np.ones((6, 6)), 4)
-    _, mask = cv2.threshold(mask, 130, 255, cv2.THRESH_TOZERO)
+    # mask = cv2.erode(mask, np.ones((6, 6)), 4)
+    # _, mask = cv2.threshold(mask, 100, 255, cv2.THRESH_TOZERO)
 
-    top_pixels = np.argsort(mask.ravel())[-50:]
-    top_coords = np.unravel_index(top_pixels, mask.shape)
-    point = np.mean(top_coords, axis=1).astype(np.uint8)
+    top_pixels = np.argsort(mask.ravel())[-25:]
+    coords = np.unravel_index(top_pixels, mask.shape)
+    # coords = np.array(np.where(mask>=200))
+    point = np.mean(coords, axis=1).astype(np.uint8)
+    mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+    cv2.circle(mask, [point[1], point[0]], 5, (0, 255, 0))
+    # point = np.mean(top_coords, axis=1).astype(np.uint8)
     return mask, point
 
 def draw_mask(image, mask_generated) :
@@ -46,9 +50,9 @@ def dump(args):
                 predictor.set_image(img)
                 masks, _, _ = predictor.predict(point_coords=np.array([(point[1], point[0])]), point_labels=np.array([1]))
                 mask = draw_mask(img, masks.transpose(1, 2, 0))
-                cv2.circle(mask, [point[1], point[0]], 5, (255, 0, 0))
-                mask_hr = cv2.cvtColor(mask_hr, cv2.COLOR_GRAY2RGB)
 
+                cv2.circle(mask, [point[1], point[0]], 5, (255, 0, 0))
+  
                 img = np.hstack([img, mask_hr, mask]).astype(np.uint8)
                 Image.fromarray(img).save("results/sam.jpg")
             
