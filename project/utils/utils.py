@@ -1,6 +1,6 @@
 # data fetching and preprocessing module
 
-import cv2
+import cv2, math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -113,23 +113,23 @@ def pack_event_stream(ev_stream, split=True,
                 event_field = np.zeros(size)
                 for event in events:
                     #consider pre/past event affect
-                    eff = -kernel * event[3] / (event[2] / TIME_PERIOD - 1)
+                    weighted = kernel * event[3] * math.tan(1.57 * event[2] / TIME_PERIOD)
                     x = int(event[0])
                     y = int(event[1])
-                    eff = eff[max(0,2-y):min(5,size[0]+2-y),max(0,2-x):min(5,size[1]+2-x)]
-                    event_field[max(0,y-2):min(size[0],y+3), max(0,x-2):min(size[1],x+3)] += eff
+                    weighted = weighted[max(0,2-y):min(5,size[0]+2-y),max(0,2-x):min(5,size[1]+2-x)]
+                    event_field[max(0,y-2):min(size[0],y+3), max(0,x-2):min(size[1],x+3)] += weighted
                 std = StandardScaler()
-                ef = std.fit_transform(event_field.flatten().reshape(-1, 1))
-                event_field = ef.reshape(event_field.shape) * 10
+                event_field = std.fit_transform(event_field.flatten().reshape(-1, 1)).reshape(event_field.shape) / 6
                 event_field = np.flip(np.flip(event_field, axis=0), axis=1)
+                event_field = np.clip(event_field, -255, 255)
                 event_field = np.uint8(255 / (1 + np.exp(-event_field)))
 
                 # split the output into 16 50*50 pieces, if necessary
                 # event_field = cv2.resize(event_field, dsize=dsize, interpolation=cv2.INTER_LINEAR)
 
-                event_field = cv2.dilate(event_field, np.ones((3, 3)), 5)
-                event_field = cv2.erode(event_field, np.ones((7, 7)), 8)
-                thr = np.sort(event_field.flatten())[-500]
+                event_field = cv2.dilate(event_field, np.ones((3, 3)), 3)
+                event_field = cv2.erode(event_field, np.ones((6, 6)), 5)
+                thr = np.sort(event_field.flatten())[-1000]
                 event_field = cv2.threshold(event_field, thr, 255, cv2.THRESH_TOZERO)[1]
                 
                 cv2.imwrite("results/sam.jpg", event_field)
@@ -144,7 +144,7 @@ def pack_event_stream(ev_stream, split=True,
                     event_countmap.append(hvsplit(event_field))
 
                 pbar.set_postfix()
-                pbar.update(0)
+                pbar.update(1)
         
         event_countmap = np.array(event_countmap)
         print("Building event countmap from packages")
@@ -232,8 +232,8 @@ class DAVIS_Dataset(data.Dataset):
     def __init__(self, dataset, size, split, sam=False):
         ev_stream, frames_raw = unpack(dataset)
         if sam:
-            ev_stream = ev_stream[:-1]
-            frames_raw = frames_raw[1:]
+            ev_stream = ev_stream
+            frames_raw = frames_raw
         self.eventset = Event_Dataset(ev_stream, size, split)
         self.frameset = Frame_Dataset(frames_raw, size, split)
         self._length = len(self.frameset)

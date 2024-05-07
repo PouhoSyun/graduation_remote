@@ -17,21 +17,24 @@ def hotarea(event_frame):
     # mask = cv2.erode(mask, np.ones((6, 6)), 4)
     # _, mask = cv2.threshold(mask, 100, 255, cv2.THRESH_TOZERO)
 
-    top_pixels = np.argsort(mask.ravel())[-25:]
+    top_pixels = np.argsort(mask.ravel())[-50:]
     coords = np.unravel_index(top_pixels, mask.shape)
     # coords = np.array(np.where(mask>=200))
     point = np.mean(coords, axis=1).astype(np.uint8)
+    rec = np.std(coords, axis=1).astype(np.uint8) * 15
+    box = np.array([point[1] - rec[1], point[0] - rec[0], point[1] + rec[1], point[0] + rec[0]])
     mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
-    cv2.circle(mask, [point[1], point[0]], 5, (0, 255, 0))
+    cv2.rectangle(mask, box[:2], box[2:], (0, 255, 0), 2)
+    # cv2.circle(mask, [point[1], point[0]], 5, (0, 255, 0))
     # point = np.mean(top_coords, axis=1).astype(np.uint8)
-    return mask, point
+    return mask, box
 
-def draw_mask(image, mask_generated) :
+def draw_mask(image, mask_generated):
     masked_image = image.copy()
     shape = masked_image.shape
     for i in range(shape[0]):
         for j in range(shape[1]):
-            if mask_generated[i][j][2]: masked_image[i][j]=np.array([0,255,0], dtype='uint8')
+            if mask_generated[i][j]: masked_image[i][j]=np.array([0,255,0], dtype='uint8')
     masked_image = masked_image.astype(np.uint8)
     return cv2.addWeighted(image, 0.3, masked_image, 0.7, 0, dtype=cv2.CV_8U)
 
@@ -44,14 +47,20 @@ def dump(args):
         for step, imgs in zip(pbar, train_dataset):
             if not step % 10: 
                 img = np.array(imgs[0].add(1).mul(127.5)).astype(np.uint8)
-                mask_hr, point = hotarea(img[1])
+                mask_hr, box = hotarea(img[1])
                 img = cv2.cvtColor(img[0:1].transpose((1, 2, 0)), cv2.COLOR_GRAY2RGB)
                 # img = np.array(Image.open("results/vqgan/1/15/15_100.jpg"))[70:330, 27:373]
                 predictor.set_image(img)
-                masks, _, _ = predictor.predict(point_coords=np.array([(point[1], point[0])]), point_labels=np.array([1]))
-                mask = draw_mask(img, masks.transpose(1, 2, 0))
+                masks, scores, _ = predictor.predict(
+                    box=box[None,:],
+                    multimask_output=True
+                )
+                # masks, _, _ = predictor.predict(point_coords=np.array([(point[1], point[0])]), point_labels=np.array([1]))
+                mask = masks[np.argmax(scores)]
+                mask = draw_mask(img, mask)
 
-                cv2.circle(mask, [point[1], point[0]], 5, (255, 0, 0))
+                cv2.rectangle(mask, box[:2], box[2:], (0, 255, 0), 2)
+                # cv2.circle(mask, [point[1], point[0]], 5, (255, 0, 0))
   
                 img = np.hstack([img, mask_hr, mask]).astype(np.uint8)
                 Image.fromarray(img).save("results/sam.jpg")
