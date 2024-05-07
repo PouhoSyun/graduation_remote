@@ -91,7 +91,7 @@ def squarify(src: np.ndarray, to_size):
 # the output is the event voxel grid map resized to size_scale(default:8) times
 def pack_event_stream(ev_stream, split=True, 
                       size=(260, 346)):
-    if False:
+    if True:
         print("Reading event countmap from npy")
         event_countmap = np.load("dataset_davis/event_countmap.npy")
     else:
@@ -232,8 +232,8 @@ class DAVIS_Dataset(data.Dataset):
     def __init__(self, dataset, size, split, sam=False):
         ev_stream, frames_raw = unpack(dataset)
         if sam:
-            ev_stream = ev_stream
-            frames_raw = frames_raw
+            ev_stream = ev_stream[:-1]
+            frames_raw = frames_raw[1:]
         self.eventset = Event_Dataset(ev_stream, size, split)
         self.frameset = Frame_Dataset(frames_raw, size, split)
         self._length = len(self.frameset)
