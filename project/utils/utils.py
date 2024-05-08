@@ -132,7 +132,7 @@ def pack_event_stream(ev_stream, split=True,
                 thr = np.sort(event_field.flatten())[-1000]
                 event_field = cv2.threshold(event_field, thr, 255, cv2.THRESH_TOZERO)[1]
                 
-                cv2.imwrite("results/sam.jpg", event_field)
+                # cv2.imwrite("results/sam.jpg", event_field)
                 # event_field = cv2.dilate(event_field, np.ones((7, 7)), 5)
             
                 event_field = np.array([event_field])
