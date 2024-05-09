@@ -129,13 +129,15 @@ def pack_event_stream(ev_stream, split=True,
 
                 event_field = cv2.dilate(event_field, np.ones((3, 3)), 3)
                 event_field = cv2.erode(event_field, np.ones((6, 6)), 5)
-                thr = np.sort(event_field.flatten())[-1000]
-                event_field = cv2.threshold(event_field, thr, 255, cv2.THRESH_TOZERO)[1]
+
+                if False: # for sam
+                    thr = np.sort(event_field.flatten())[-1000]
+                    event_field = cv2.threshold(event_field, thr, 255, cv2.THRESH_TOZERO)[1]
                 
                 # cv2.imwrite("results/sam.jpg", event_field)
                 # event_field = cv2.dilate(event_field, np.ones((7, 7)), 5)
             
-                event_field = np.array([event_field])
+                event_field = event_field[None,:]
                 event_field = squarify(event_field, 400)
                 
                 if not split:
@@ -231,13 +233,15 @@ class Event_Dataset(data.Dataset):
 class DAVIS_Dataset(data.Dataset):
     def __init__(self, dataset, size, split, sam=False):
         ev_stream, frames_raw = unpack(dataset)
-        if sam:
-            ev_stream = ev_stream[:-1]
+        ev_stream = ev_stream[:-1]
+        if sam:    
             frames_raw = frames_raw[1:]
+        else:
+            frames_raw = frames_raw[:-1]
         self.eventset = Event_Dataset(ev_stream, size, split)
         self.frameset = Frame_Dataset(frames_raw, size, split)
         self._length = len(self.frameset)
-        self.scaler = 20
+        self.scaler = 10
         self.sam = sam
         if sam: self.scaler = 1
         pass

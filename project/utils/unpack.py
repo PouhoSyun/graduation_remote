@@ -16,7 +16,7 @@ def unpack(dataset_mat):
     x = data['events']['x']
     y = data['events']['y']
     t = data['events']['t'] * 1.0e-6
-    p = data['events']['p'] * 2 - 1
+    p = data['events']['p'].astype(np.int64) * 2 - 1
     frames = data['frames']['s']
     frames = [np.array([array_padding(frame)]) for frame in frames]
 

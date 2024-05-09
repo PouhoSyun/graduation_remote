@@ -80,9 +80,9 @@ class Mixer(nn.Module):
         model.load_checkpoint(args.vqg_checkpoint_path)
         model.encoder.eval()
         model.quant_conv.eval()
-        # model.codebook.eval()
-        # model.post_quant_conv.eval()
-        # model.decoder.eval()
+        model.codebook.eval()
+        model.post_quant_conv.eval()
+        model.decoder.eval()
         return model
     
     @staticmethod
