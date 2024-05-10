@@ -241,7 +241,7 @@ class DAVIS_Dataset(data.Dataset):
         self.eventset = Event_Dataset(ev_stream, size, split)
         self.frameset = Frame_Dataset(frames_raw, size, split)
         self._length = len(self.frameset)
-        self.scaler = 10
+        self.scaler = 1
         self.sam = sam
         if sam: self.scaler = 1
         pass

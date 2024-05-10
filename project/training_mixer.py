@@ -9,10 +9,12 @@ from tqdm import tqdm
 import numpy as np
 import torch
 from torchvision import utils as vutils
+from torchvision.transforms import GaussianBlur
 from torch.optim.lr_scheduler import StepLR
 from model.discriminator import Discriminator
 from model.mixer import Mixer
 from utils.lpips import LPIPS
+import utils.eval as eval
 from utils.utils import load_davisset
 
 class TrainMixer:
@@ -57,22 +59,22 @@ class TrainMixer:
 
     @staticmethod
     def detailed(args, event_frame: torch.Tensor, rec: torch.Tensor):
-        # event_frame = event_frame.abs()
-        mask = event_frame
-        k_size = 5
-        pad = k_size // 2
-        for i in range(pad, event_frame.shape[0]-pad):
-            for j in range(pad, event_frame.shape[1]-pad):
-                kernel = np.ones((k_size, k_size))
-                tmp = event_frame[i-pad:i+pad+1, j-pad:j+pad+1]
-                tmp = np.multiply(kernel, tmp)
-                mask[i][j] = np.sum(tmp)
-        mask = torch.Tensor(mask).to(args.device).detach()
-        mask = torch.atan(mask) * args.bar_factor + 1
-        mask = (mask - mask.min()) / (mask.max() - mask.min())
+        mask = torch.tan(1.5 * event_frame.abs())
+        # k_size = 5
+        # pad = k_size // 2
+        # for i in range(pad, event_frame.shape[0]-pad):
+        #     for j in range(pad, event_frame.shape[1]-pad):
+        #         kernel = np.ones((k_size, k_size))
+        #         tmp = event_frame[i-pad:i+pad+1, j-pad:j+pad+1]
+        #         tmp = np.multiply(kernel, tmp)
+        #         mask[i][j] = np.sum(tmp)
+        # mask = torch.Tensor(mask).to(args.device).detach()
+        # mask = torch.atan(mask) * args.bar_factor + 1
+        # mask = (mask - mask.min()) / (mask.max() - mask.min())
+        mask = GaussianBlur(3)(mask)
         vutils.save_image(mask, os.path.join("results/mask/mask2.jpg"))
-        loss = torch.mul(rec, mask)
-        return loss.mean() * args.rec_loss_factor
+        loss = torch.mul(rec, mask) * args.hotarea_factor + rec
+        return loss.mean() / (args.hotarea_factor + 1)
 
     def train(self, args):
         train_dataset = load_davisset(args)
@@ -90,23 +92,29 @@ class TrainMixer:
 
                     disc_fake = self.discriminator(decoded_images)
 
-                    perceptual_loss = args.perceptual_loss_factor * self.perceptual_loss(imgs, decoded_images)
-                    rec_loss = torch.abs(imgs - decoded_images)
-                    perceptual_loss = perceptual_loss.mean()
+                    loss = eval.tensor_eval(imgs, decoded_images, self.perceptual_loss)
+                    perceptual_loss = loss[3]
+                    rec_loss = loss[0]
+                    # perceptual_loss = self.perceptual_loss(imgs, decoded_images)
+                    # rec_loss = torch.abs(imgs - decoded_images)
+                    # perceptual_loss = perceptual_loss.mean()
                     g_loss = -torch.mean(disc_fake)
                     λ = self.mixer.vqgan.calculate_lambda(perceptual_loss, g_loss)
-                    # discrimination loss
-                    con_loss = args.disc_factor * λ * g_loss
-                    # resistance loss
-                    bar_loss = perceptual_loss + self.detailed(args, event_frames, rec_loss)
+                    
+                    gan_loss = args.gan_factor * λ * g_loss
+                    con_loss = (args.lpips_factor * perceptual_loss +\
+                         self.detailed(args, event_frames, rec_loss)) * args.con_factor
 
-                    loss = (con_loss + bar_loss) / args.accu_times
-                    loss.backward()
+                    tot_loss = (gan_loss + con_loss) / args.accu_times
+                    tot_loss.backward()
 
                     if accu_step % args.accu_times == 0:
                         self.opt.step()
                         self.opt.zero_grad()
-
+                    
+                    real_fake_images = torch.cat((imgs[:4].add(1).mul(0.5), event_frames[:4].add(1).mul(0.5), decoded_images[:4].add(1).mul(0.5)))
+                    vutils.save_image(real_fake_images, os.path.join("results/mixer.jpg"), nrow=4)
+                    
                     if accu_step % 10 == 0:
                         with torch.no_grad():
                             real_fake_images = torch.cat((imgs[:4].add(1).mul(0.5), event_frames[:4].add(1).mul(0.5), decoded_images[:4].add(1).mul(0.5)))
@@ -115,8 +123,11 @@ class TrainMixer:
 
                     pbar.set_postfix(
                         Epoch=epoch,
-                        CON_Loss=np.round(con_loss.cpu().detach().numpy().item(), 5),
-                        BAR_Loss=np.round(bar_loss.cpu().detach().numpy().item(), 5)
+                        GAN=np.round(gan_loss.cpu().detach().numpy().item(), 5),
+                        MSE=np.round(loss[0].cpu().detach().numpy().item(), 5),
+                        PSNR=np.round(loss[1].cpu().detach().numpy().item(), 5),
+                        SSIM=np.round(loss[2].cpu().detach().numpy().item(), 5),
+                        LPIPS=np.round(loss[3].cpu().detach().numpy().item(), 5)
                     )
                     pbar.update(0)
                 os.makedirs("checkpoints/mixer/" + args.dataset, exist_ok=True)
@@ -134,19 +145,19 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=5, help='Input batch size for training (default: 6)')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 100)')
-    parser.add_argument('--learning-rate', type=float, default=1e-3, help='Learning rate.')
-    parser.add_argument('--beta1', type=float, default=0.3, help='Adam beta param (default: 0.5)')
+    parser.add_argument('--learning-rate', type=float, default=8e-4, help='Learning rate.')
+    parser.add_argument('--beta1', type=float, default=0.7, help='Adam beta param (default: 0.5)')
     parser.add_argument('--beta2', type=float, default=0.7, help='Adam beta param (default: 0.999)')
-    parser.add_argument('--disc-factor', type=float, default=3., help='')
-    parser.add_argument('--rec-loss-factor', type=float, default=19., help='Weighting factor for reconstruction loss.')
-    parser.add_argument('--perceptual-loss-factor', type=float, default=3., help='Weighting factor for perceptual loss.')
-    parser.add_argument('--bar-factor', type=float, default=1., help='')
+    parser.add_argument('--gan-factor', type=float, default=3, help='')
+    parser.add_argument('--con-factor', type=float, default=30., help='Weighting factor for reconstruction loss.')
+    parser.add_argument('--lpips-factor', type=float, default=5., help='Weighting factor for perceptual loss.')
+    parser.add_argument('--hotarea-factor', type=float, default=5., help='')
     parser.add_argument('--accu-times', type=int, default=3, help='Times of gradient accumulation.')
     parser.add_argument('--vqg-checkpoint-path', type=str)
     parser.add_argument('--dis-checkpoint-path', type=str)
     parser.add_argument('--mix-checkpoint-path', type=str)
     parser.add_argument('--load', type=bool, default=True)
-    parser.add_argument('--step-rate', type=float, default=0.2)
+    parser.add_argument('--step-rate', type=float, default=0.8)
     parser.add_argument('--sam', type=bool, default=False)
 
     args = parser.parse_args()
@@ -154,7 +165,7 @@ if __name__ == '__main__':
     args.dataset_format = 'aedat'
     args.vqg_checkpoint_path = "checkpoints/vqgan/"+args.dataset+"/epoch_15.pt"
     args.dis_checkpoint_path = "checkpoints/discriminator/"+args.dataset+"/epoch_15.pt"
-    args.mix_checkpoint_path = "checkpoints/mixer/"+args.dataset+"/epoch_1m.pt"
+    args.mix_checkpoint_path = "checkpoints/mixer/"+args.dataset+"/epoch_4m.pt"
     
     if torch.cuda.is_available():
         args.device = torch.device("cuda")
