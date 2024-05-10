@@ -132,13 +132,13 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=5, help='Input batch size for training (default: 6)')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 100)')
-    parser.add_argument('--learning-rate', type=float, default=1e-3, help='Learning rate.')
+    parser.add_argument('--learning-rate', type=float, default=5e-5, help='Learning rate.')
     parser.add_argument('--beta1', type=float, default=0.3, help='Adam beta param (default: 0.5)')
     parser.add_argument('--beta2', type=float, default=0.7, help='Adam beta param (default: 0.999)')
-    parser.add_argument('--gan-factor', type=float, default=3, help='')
-    parser.add_argument('--con-factor', type=float, default=5., help='Weighting factor for reconstruction loss.')
-    parser.add_argument('--lpips-factor', type=float, default=1., help='Weighting factor for perceptual loss.')
-    parser.add_argument('--hotarea-factor', type=float, default=3., help='')
+    parser.add_argument('--gan-factor', type=float, default=1., help='')
+    parser.add_argument('--con-factor', type=float, default=4., help='Weighting factor for reconstruction loss.')
+    parser.add_argument('--lpips-factor', type=float, default=0.5, help='Weighting factor for perceptual loss.')
+    parser.add_argument('--hotarea-factor', type=float, default=2., help='')
     parser.add_argument('--accu-times', type=int, default=5, help='Times of gradient accumulation.')
     parser.add_argument('--vqg-checkpoint-path', type=str)
     parser.add_argument('--dis-checkpoint-path', type=str)
@@ -152,7 +152,7 @@ if __name__ == '__main__':
     args.dataset_format = 'aedat'
     args.vqg_checkpoint_path = "checkpoints/vqgan/"+args.dataset+"/epoch_15.pt"
     args.dis_checkpoint_path = "checkpoints/discriminator/"+args.dataset+"/epoch_15.pt"
-    args.mix_checkpoint_path = "checkpoints/mixer/"+args.dataset+"/epoch_8m.pt"
+    args.mix_checkpoint_path = "checkpoints/mixer/"+args.dataset+"/epoch_k.pt"
     
     if torch.cuda.is_available():
         args.device = torch.device("cuda")
