@@ -58,21 +58,12 @@ class TrainMixer:
         return model
 
     @staticmethod
-    def detailed(args, event_frame: torch.Tensor, rec: torch.Tensor):
+    def detailed(args, event_frame: torch.Tensor, imgs, decoded_images):
+        rec = (imgs - decoded_images) ** 2
         mask = torch.tan(1.5 * event_frame.abs())
-        # k_size = 5
-        # pad = k_size // 2
-        # for i in range(pad, event_frame.shape[0]-pad):
-        #     for j in range(pad, event_frame.shape[1]-pad):
-        #         kernel = np.ones((k_size, k_size))
-        #         tmp = event_frame[i-pad:i+pad+1, j-pad:j+pad+1]
-        #         tmp = np.multiply(kernel, tmp)
-        #         mask[i][j] = np.sum(tmp)
-        # mask = torch.Tensor(mask).to(args.device).detach()
-        # mask = torch.atan(mask) * args.bar_factor + 1
-        # mask = (mask - mask.min()) / (mask.max() - mask.min())
-        mask = GaussianBlur(3)(mask)
+        mask = GaussianBlur(39)(mask)
         vutils.save_image(mask, os.path.join("results/mask/mask2.jpg"))
+
         loss = torch.mul(rec, mask) * args.hotarea_factor + rec
         return loss.mean() / (args.hotarea_factor + 1)
 
@@ -94,16 +85,12 @@ class TrainMixer:
 
                     loss = eval.tensor_eval(imgs, decoded_images, self.perceptual_loss)
                     perceptual_loss = loss[3]
-                    rec_loss = loss[0]
-                    # perceptual_loss = self.perceptual_loss(imgs, decoded_images)
-                    # rec_loss = torch.abs(imgs - decoded_images)
-                    # perceptual_loss = perceptual_loss.mean()
                     g_loss = -torch.mean(disc_fake)
                     λ = self.mixer.vqgan.calculate_lambda(perceptual_loss, g_loss)
                     
                     gan_loss = args.gan_factor * λ * g_loss
                     con_loss = (args.lpips_factor * perceptual_loss +\
-                         self.detailed(args, event_frames, rec_loss)) * args.con_factor
+                         self.detailed(args, event_frames, imgs, decoded_images)) * args.con_factor
 
                     tot_loss = (gan_loss + con_loss) / args.accu_times
                     tot_loss.backward()
@@ -145,14 +132,14 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=5, help='Input batch size for training (default: 6)')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 100)')
-    parser.add_argument('--learning-rate', type=float, default=8e-4, help='Learning rate.')
-    parser.add_argument('--beta1', type=float, default=0.7, help='Adam beta param (default: 0.5)')
+    parser.add_argument('--learning-rate', type=float, default=1e-3, help='Learning rate.')
+    parser.add_argument('--beta1', type=float, default=0.3, help='Adam beta param (default: 0.5)')
     parser.add_argument('--beta2', type=float, default=0.7, help='Adam beta param (default: 0.999)')
     parser.add_argument('--gan-factor', type=float, default=3, help='')
-    parser.add_argument('--con-factor', type=float, default=30., help='Weighting factor for reconstruction loss.')
-    parser.add_argument('--lpips-factor', type=float, default=5., help='Weighting factor for perceptual loss.')
-    parser.add_argument('--hotarea-factor', type=float, default=5., help='')
-    parser.add_argument('--accu-times', type=int, default=3, help='Times of gradient accumulation.')
+    parser.add_argument('--con-factor', type=float, default=5., help='Weighting factor for reconstruction loss.')
+    parser.add_argument('--lpips-factor', type=float, default=1., help='Weighting factor for perceptual loss.')
+    parser.add_argument('--hotarea-factor', type=float, default=3., help='')
+    parser.add_argument('--accu-times', type=int, default=5, help='Times of gradient accumulation.')
     parser.add_argument('--vqg-checkpoint-path', type=str)
     parser.add_argument('--dis-checkpoint-path', type=str)
     parser.add_argument('--mix-checkpoint-path', type=str)
@@ -165,7 +152,7 @@ if __name__ == '__main__':
     args.dataset_format = 'aedat'
     args.vqg_checkpoint_path = "checkpoints/vqgan/"+args.dataset+"/epoch_15.pt"
     args.dis_checkpoint_path = "checkpoints/discriminator/"+args.dataset+"/epoch_15.pt"
-    args.mix_checkpoint_path = "checkpoints/mixer/"+args.dataset+"/epoch_4m.pt"
+    args.mix_checkpoint_path = "checkpoints/mixer/"+args.dataset+"/epoch_8m.pt"
     
     if torch.cuda.is_available():
         args.device = torch.device("cuda")

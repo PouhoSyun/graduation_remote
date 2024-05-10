@@ -71,8 +71,8 @@ class LPIPS(nn.Module):
 class ScalingLayer(nn.Module):
     def __init__(self):
         super(ScalingLayer, self).__init__()
-        self.register_buffer("shift", torch.Tensor([-0.030])[None, :, None, None])
-        self.register_buffer("scale", torch.Tensor([0.458])[None, :, None, None])
+        self.register_buffer("shift", torch.Tensor([-0.088])[None, :, None, None])
+        self.register_buffer("scale", torch.Tensor([0.448])[None, :, None, None])
 
     def forward(self, x):
         return (x - self.shift) / self.scale
@@ -89,7 +89,6 @@ class VGG16(nn.Module):
     def __init__(self):
         super(VGG16, self).__init__()
         vgg_pretrained_features = vgg16(pretrained=True).features
-        self.filter = nn.Conv2d(1, 3, 1, 1, 0, bias=False)
         slices = [vgg_pretrained_features[i] for i in range(30)]
         self.slice1 = nn.Sequential(*slices[0:4])
         self.slice2 = nn.Sequential(*slices[4:9])
@@ -99,8 +98,8 @@ class VGG16(nn.Module):
         for param in self.parameters():
             param.requires_grad = False
 
-    def forward(self, x):
-        h = self.filter(x)
+    def forward(self, x:torch.Tensor):
+        h = x.repeat(1, 3, 1, 1)
         h = self.slice1(h)
         h_relu1 = h
         h = self.slice2(h)
